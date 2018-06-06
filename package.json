@@ -1,0 +1,16 @@
+{
+  "name": "dat-archive-test",
+  "version": "0.0.1",
+  "description": "Test cases for DatArchive",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "mocha": "^5.2.0"
+  }
+}
