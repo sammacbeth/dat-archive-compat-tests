@@ -117,14 +117,12 @@ describe('DatArchive API test', () => {
 
       it('reads file contents (base64)', async () => {
         const contents = await archive.readFile(testFile, { encoding: 'base64' });
-        expect(contents).to.equal(btoa(testFileContents));
+        expect(contents).to.equal('VGVzdCBnZXR0aW5nIGNvbnRlbnQgZnJvbSBmaWxlLCDDpMO8DQo=');
       });
 
       it('reads file contents (hex)', async () => {
         const contents = await archive.readFile(testFile, { encoding: 'hex' });
-        const hexContents = testFileContents.split('')
-          .map((v, ind) => ('0' + (testFileContents.charCodeAt(ind)).toString(16)).slice(-2)).join('');
-        expect(contents).to.equal(hexContents);
+        expect(contents).to.equal('546573742067657474696e6720636f6e74656e742066726f6d2066696c652c20c3a4c3bc0d0a');
       });
 
       it('reads file contents (binary)', async () => {
@@ -149,8 +147,8 @@ describe('DatArchive API test', () => {
       it('opts.recursive returns a recursive listing', async () => {
         const files = await archive.readdir('/node_modules/chai/lib', { recursive: true });
         expect(files).to.contain('chai.js');
-        expect(files).to.contain('\\chai\\core\\assertions.js');
-        expect(files).to.contain('\\chai\\core');
+        expect(files).to.contain('chai/core/assertions.js');
+        expect(files).to.contain('chai/core');
       });
 
       it('opts.stat returns an array of stat objects', async () => {
@@ -310,10 +308,10 @@ describe('DatArchive API test', () => {
       });
 
       it('writes data to file (binary)', async () => {
-        const dataToWrite = new ArrayBuffer([1, 2, 3, 4]);
-        await archive.writeFile(testFile, dataToWrite, { encoding: 'binary' });
+        const dataToWrite = Uint8Array.from([97, 98, 99, 100]);
+        await archive.writeFile(testFile, dataToWrite.buffer, { encoding: 'binary' });
         const readData = await archive.readFile(testFile, { encoding: 'binary' })
-        expect(new Uint8Array(readData).toString()).to.equal(new Uint8Array(dataToWrite).toString());
+        expect(new Uint8Array(readData).toString()).to.equal(dataToWrite.toString());
       });
 
       it('rejects if parent directory does not exist', () => {
