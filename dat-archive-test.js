@@ -314,6 +314,13 @@ describe('DatArchive API test', () => {
         expect(new Uint8Array(readData).toString()).to.equal(dataToWrite.toString());
       });
 
+      it('writes binary if data is an ArrayBuffer', async () => {
+        const dataToWrite = Uint8Array.from([97, 98, 99, 100]);
+        await archive.writeFile(testFile, dataToWrite.buffer);
+        const readData = await archive.readFile(testFile, { encoding: 'binary' })
+        expect(new Uint8Array(readData).toString()).to.equal(dataToWrite.toString());
+      });
+
       it('rejects if parent directory does not exist', () => {
         expectPromiseRejected(archive.writeFile('/dir1/test.txt', 'some content'));
       });
