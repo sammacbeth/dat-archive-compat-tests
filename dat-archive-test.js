@@ -278,13 +278,66 @@ describe('DatArchive API test', () => {
     });
 
     describe('copy()', () => {
-      afterEach(async () => {
-        await archive.unlink('copy of dat.json');
+
+      context('file', () => {
+        afterEach(async () => {
+          await archive.unlink('copy of dat.json');
+        });
+
+        it('copies a file', async () => {
+          await archive.copy('dat.json', 'copy of dat.json');
+          expect(await archive.readFile('copy of dat.json')).to.equal(await archive.readFile('dat.json'));
+        });
+
+        it('overwrites if copy destination already exists', async () => {
+          // put content in target, then copy something else to it
+          await archive.writeFile('copy of dat.json', '{}');
+          await archive.copy('dat.json', 'copy of dat.json');
+          expect(await archive.readFile('copy of dat.json')).to.equal(await archive.readFile('dat.json'));
+        });
+
       });
-  
-      it('copies a file', async () => {
-        await archive.copy('dat.json', 'copy of dat.json');
-        expect(await archive.readFile('copy of dat.json')).to.equal(await archive.readFile('dat.json'));
+
+      context('directory', () => {
+
+        beforeEach(async () => {
+          await archive.mkdir('test');
+          await archive.writeFile('test/data.txt', 'some data in a file');
+        });
+
+        it('copies a directory', async () => {
+          await archive.copy('test', 'copy of test');
+          // copied files exist
+          expect((await archive.stat('copy of test')).isDirectory()).to.be.true;
+          expect((await archive.stat('copy of test/data.txt')).isFile()).to.be.true;
+          // original files exist
+          expect((await archive.stat('test')).isDirectory()).to.be.true;
+          expect((await archive.stat('test/data.txt')).isFile()).to.be.true;
+        });
+
+        it('merges with destination folder if it already exists', async () => {
+          // prepare existing target dir
+          await archive.copy('test', 'copy of test');
+          await archive.writeFile('copy of test/otherfile.json', '{}');
+          await archive.writeFile('copy of test/data.txt', 'new content');
+
+          // copy on top of the directory
+          await archive.copy('test', 'copy of test');
+          expect(await archive.readdir('copy of test')).to.have.length(2);
+          expect(await archive.readFile('copy of test/data.txt')).to.equal('some data in a file');
+          expect(await archive.readFile('copy of test/otherfile.json')).to.equal('{}');
+        });
+
+        afterEach(async () => {
+          await archive.unlink('test/data.txt');
+          await archive.rmdir('test');
+          await Promise.all((await archive.readdir('copy of test')).map(f => archive.unlink(`copy of test/${f}`)));
+          await archive.rmdir('copy of test');
+        });
+      });
+
+      it('rejects if copy source does not exist', () => {
+        return expectPromiseRejected(archive.copy('nonexistant', 'existant'));
       });
     });
 
@@ -406,6 +459,74 @@ describe('DatArchive API test', () => {
           await archive.unlink(file);
           await archive.rmdir(dir);
         });
+      });
+    });
+
+    describe('rename()', () => {
+
+      const fileContents = 'some data in a file';
+
+      context('file', () => {
+
+        beforeEach(async () => {
+          await archive.writeFile('data.txt', fileContents);
+        });
+
+        afterEach(async () => {
+          await archive.unlink('data2.txt');
+        });
+
+        it('renames a file', async () => {
+          await archive.rename('data.txt', 'data2.txt');
+          expect(await archive.readFile('data2.txt')).to.equal(fileContents);
+          expect(await archive.readdir('/')).to.not.contain('data.txt');
+        });
+
+        it('rejects destination already exists', async () => {
+          // put content in target, then copy something else to it
+          await archive.writeFile('data2.txt', '{}');
+          return expectPromiseRejected(archive.rename('data.json', 'data2.txt'));
+        });
+      });
+
+      context('directory', () => {
+
+        beforeEach(async () => {
+          await archive.mkdir('test');
+          await archive.writeFile('test/data.txt', fileContents);
+        });
+
+        it('renames a directory', async () => {
+          await archive.rename('test', 'copy of test');
+          // copied files exist
+          expect((await archive.stat('copy of test')).isDirectory()).to.be.true;
+          expect((await archive.stat('copy of test/data.txt')).isFile()).to.be.true;
+          // original files do not exist
+          expect(await archive.readdir('/')).to.not.contain('test');
+        });
+
+        it('rejects if destination folder already exists', async () => {
+          // prepare existing target dir
+          await archive.mkdir('copy of test');
+          await archive.writeFile('copy of test/data.txt', 'new content');
+
+          return expectPromiseRejected(archive.rename('test', 'copy of test'));
+        });
+
+        afterEach(async () => {
+          try {
+            await Promise.all((await archive.readdir('test')).map(f => archive.unlink(`test/${f}`)));
+            await archive.rmdir('test');
+          } catch(e) {}
+          try {
+            await Promise.all((await archive.readdir('copy of test')).map(f => archive.unlink(`copy of test/${f}`)));
+            await archive.rmdir('copy of test');
+          } catch(e) {}
+        });
+      });
+
+      it('rejects if source does not exist', () => {
+        return expectPromiseRejected(archive.rename('nonexistant', 'existant'));
       });
     });
   });
