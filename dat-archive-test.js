@@ -151,6 +151,16 @@ describe('DatArchive API test', () => {
         expect(files).to.contain('chai/core');
       });
 
+      it('opts.recursive lists directories with unix-style (/) separators, no preceding slash', async () => {
+        const files = await archive.readdir('/node_modules/chai/lib', { recursive: true });
+        expect(files).to.contain('chai/core/assertions.js');
+      });
+
+      it('opts.recursive lists nested files with windows-style (\\) separators, with preceding slash', async () => {
+        const files = await archive.readdir('\\node_modules\\chai\\lib', { recursive: true });
+        expect(files).to.contain('\\chai\\core\\assertions.js');
+      });
+
       it('opts.stat returns an array of stat objects', async () => {
         const files = await archive.readdir('/', { stat: true });
         expect(files).to.have.length(expectedFiles.length);
