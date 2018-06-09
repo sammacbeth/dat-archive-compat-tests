@@ -8,7 +8,7 @@ async function expectPromiseRejected(asyncFunc) {
 }
 
 describe('DatArchive API test', () => {
-  
+
   it('exists', () => {
     expect(window.DatArchive).to.exist;
   });
@@ -45,7 +45,7 @@ describe('DatArchive API test', () => {
       it('contains the archive\'s url', () => {
         expect(archive.url).to.equal(archiveUrl);
       });
-      
+
       it('has trailing slash removed', () => {
         archive = new DatArchive(`${archiveUrl}/`);
         expect(archive.url).to.equal(archiveUrl);
@@ -103,7 +103,7 @@ describe('DatArchive API test', () => {
       });
     });
 
-    describe('readFile()', () => {      
+    describe('readFile()', () => {
 
       it('reads file contents (default)', async () => {
         const contents = await archive.readFile(testFile);
@@ -136,7 +136,7 @@ describe('DatArchive API test', () => {
 
     describe('readdir()', () => {
 
-      const expectedFiles = ['node_modules', 'dat-archive-test.js', 'dat.json', 'index.html', 'package-lock.json', 'package.json', 'test.txt'];      
+      const expectedFiles = ['node_modules', 'dat-archive-test.js', 'dat.json', 'index.html', 'package-lock.json', 'package.json', 'test.txt'];
 
       it('reads contents of the directory as an array', async () => {
         const files = await archive.readdir('/');
@@ -233,7 +233,7 @@ describe('DatArchive API test', () => {
       if (!archiveAddress) {
         this.timeout(60000);
         const archive = await DatArchive.create({
-          title: 'DatArchive write test', 
+          title: 'DatArchive write test',
           description: 'for DatArchive test suite',
         });
         localStorage.setItem('testArchive', archive.url);
@@ -527,6 +527,188 @@ describe('DatArchive API test', () => {
 
       it('rejects if source does not exist', () => {
         return expectPromiseRejected(archive.rename('nonexistant', 'existant'));
+      });
+    });
+
+    describe('createFileActivitySteam()', () => {
+
+      beforeEach(async () => {
+        await archive.writeFile('watch.txt', '');
+        await archive.writeFile('watch2.txt', '');
+        await archive.writeFile('dont_watch.txt', '');
+      });
+
+      afterEach(async () => {
+        await archive.unlink('watch.txt');
+        await archive.unlink('watch2.txt');
+        await archive.unlink('dont_watch.txt');
+      });
+
+      context('without pattern', () => {
+        let stream;
+
+        afterEach(() => {
+          stream.close();
+        });
+
+        it('changed event triggers when file is changed; path has preceeding slash', () => {
+          stream = archive.createFileActivityStream();
+          const test = new Promise((resolve) => {
+            stream.addEventListener('changed', resolve);
+          });
+          archive.writeFile('watch.txt', 'a');
+          return test.then((ev) => {
+            expect(ev.path).to.equal('/watch.txt');
+          });
+        });
+
+        it('does not trigger if not files are changed', () => {
+          stream = archive.createFileActivityStream();
+          return new Promise((resolve, reject) => {
+            stream.addEventListener('changed', reject);
+            setTimeout(resolve, 100);
+          });
+        });
+
+        it('triggers for the last event before the listener is registered', async () => {
+          stream = archive.createFileActivityStream();
+          await archive.writeFile('dont_watch.txt', 'b');
+          await archive.writeFile('watch.txt', 'a');
+
+          const test = new Promise((resolve) => {
+            stream.addEventListener('changed', resolve);
+          });
+          return test.then((ev) => {
+            expect(ev.path).to.equal('/watch.txt');
+          });
+        });
+
+        it('does not trigger for events before stream creation', async () => {
+          await archive.writeFile('watch.txt', 'a');
+          stream = archive.createFileActivityStream();
+          const test = new Promise((resolve, reject) => {
+            stream.addEventListener('changed', reject);
+            setTimeout(resolve, 100);
+          });
+          return test;
+        });
+
+        it('triggers for all paths', async () => {
+          stream = archive.createFileActivityStream();
+          const test = new Promise((resolve) => {
+            const events = []
+            stream.addEventListener('changed', (ev) => {
+              events.push(ev);
+              console.log(ev);
+              if (events.length === 3) {
+                resolve(events);
+              }
+            });
+          });
+
+          await archive.writeFile('watch.txt', 'a');
+          await archive.writeFile('dont_watch.txt', 'b');
+          await archive.writeFile('watch.txt', 'b');
+
+          return test.then((events) => {
+            expect(events).to.have.length(3);
+            expect(events.filter((ev => ev.path === '/watch.txt'))).to.have.length(2);
+            expect(events.filter((ev => ev.path === '/dont_watch.txt'))).to.have.length(1);
+          });
+        });
+      });
+
+      context('with string pattern', () => {
+        let stream;
+
+        afterEach(() => {
+          stream.close();
+        });
+
+        it('triggers only for provided path', async () => {
+          // note, preceeding / is required
+          stream = archive.createFileActivityStream('/watch.txt');
+          const test = new Promise((resolve) => {
+            const events = []
+            stream.addEventListener('changed', (ev) => {
+              events.push(ev);
+              console.log(ev);
+              if (events.length === 2) {
+                resolve(events);
+              }
+            });
+          });
+
+          await archive.writeFile('watch.txt', 'a');
+          await archive.writeFile('dont_watch.txt', 'b');
+          await archive.writeFile('watch.txt', 'b');
+
+          return test.then((events) => {
+            expect(events).to.have.length(2);
+            expect(events.filter((ev => ev.path === '/watch.txt'))).to.have.length(2);
+            expect(events.filter((ev => ev.path === '/dont_watch.txt'))).to.have.length(0);
+          });
+        });
+      });
+
+      context('with array of patterns', () => {
+        let stream;
+
+        afterEach(() => {
+          stream.close();
+        });
+
+        it('matches for set of paths', async () => {
+          // note, preceeding / is required
+          stream = archive.createFileActivityStream(['/watch.txt', '/watch2.txt']);
+          const test = new Promise((resolve) => {
+            const events = []
+            stream.addEventListener('changed', (ev) => {
+              events.push(ev);
+              console.log(ev);
+              if (events.length === 2) {
+                resolve(events);
+              }
+            });
+          });
+
+          await archive.writeFile('watch.txt', 'a');
+          await archive.writeFile('dont_watch.txt', 'b');
+          await archive.writeFile('watch2.txt', 'b');
+
+          return test.then((events) => {
+            expect(events).to.have.length(2);
+            const paths = events.map(ev => ev.path);
+            expect(paths).to.contain('/watch.txt');
+            expect(paths).to.contain('/watch2.txt');
+          });
+        });
+
+        it('matches for anymatch patterns', async () => {
+          // note, preceeding / is required
+          stream = archive.createFileActivityStream(['/*watch.txt']);
+          const test = new Promise((resolve) => {
+            const events = []
+            stream.addEventListener('changed', (ev) => {
+              events.push(ev);
+              console.log(ev);
+              if (events.length === 2) {
+                resolve(events);
+              }
+            });
+          });
+
+          await archive.writeFile('watch.txt', 'a');
+          await archive.writeFile('watch2.txt', 'b');
+          await archive.writeFile('dont_watch.txt', 'b');
+
+          return test.then((events) => {
+            expect(events).to.have.length(2);
+            const paths = events.map(ev => ev.path);
+            expect(paths).to.contain('/watch.txt');
+            expect(paths).to.contain('/dont_watch.txt');
+          });
+        });
       });
     });
   });
