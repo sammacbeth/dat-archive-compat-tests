@@ -7,6 +7,10 @@ async function expectPromiseRejected(asyncFunc) {
   });
 }
 
+async function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 describe('DatArchive API test', () => {
 
   it('exists', () => {
@@ -532,16 +536,15 @@ describe('DatArchive API test', () => {
 
     describe('createFileActivitySteam()', () => {
 
-      beforeEach(async () => {
-        await archive.writeFile('watch.txt', '');
-        await archive.writeFile('watch2.txt', '');
-        await archive.writeFile('dont_watch.txt', '');
-      });
-
       afterEach(async () => {
-        await archive.unlink('watch.txt');
-        await archive.unlink('watch2.txt');
-        await archive.unlink('dont_watch.txt');
+        const files = await archive.readdir('/');
+        const deletions = ['watch.txt', 'watch2.txt', 'dont_watch.txt']
+        .map(async (file) => {
+          if (files.indexOf(file) !== -1) {
+            await archive.unlink(file);
+          }
+        });
+        await Promise.all(deletions);
       });
 
       context('without pattern', () => {
@@ -551,11 +554,12 @@ describe('DatArchive API test', () => {
           stream.close();
         });
 
-        it('changed event triggers when file is changed; path has preceeding slash', () => {
+        it('changed event triggers when file is changed; path has preceeding slash', async () => {
           stream = archive.createFileActivityStream();
           const test = new Promise((resolve) => {
             stream.addEventListener('changed', resolve);
           });
+          await wait(500);
           archive.writeFile('watch.txt', 'a');
           return test.then((ev) => {
             expect(ev.path).to.equal('/watch.txt');
@@ -605,6 +609,7 @@ describe('DatArchive API test', () => {
               }
             });
           });
+          await wait(500);
 
           await archive.writeFile('watch.txt', 'a');
           await archive.writeFile('dont_watch.txt', 'b');
@@ -638,6 +643,7 @@ describe('DatArchive API test', () => {
               }
             });
           });
+          await wait(500);
 
           await archive.writeFile('watch.txt', 'a');
           await archive.writeFile('dont_watch.txt', 'b');
@@ -671,6 +677,7 @@ describe('DatArchive API test', () => {
               }
             });
           });
+          await wait(500);
 
           await archive.writeFile('watch.txt', 'a');
           await archive.writeFile('dont_watch.txt', 'b');
@@ -697,6 +704,7 @@ describe('DatArchive API test', () => {
               }
             });
           });
+          await wait(500);
 
           await archive.writeFile('watch.txt', 'a');
           await archive.writeFile('watch2.txt', 'b');
